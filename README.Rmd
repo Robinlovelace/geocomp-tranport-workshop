@@ -243,11 +243,12 @@ In any case, we can find the fastest route between any 2 'node' points on the gr
 
 ```{r}
 verts <- dodgr_vertices(ways_dg) # the vertices or points for routing
-dp = dodgr_paths(ways_dg, from = verts$id [1], to = verts$id [9000]) # arbitrary values
+# path between 2 arbitrarily chosen vertices:
+dp = dodgr_paths(ways_dg, from = verts$id [1], to = verts$id [9000])
 str(dp)
 ```
 
-The result is a character of IDs representing the shortest path, with values
+The result is a character vector of IDs representing the shortest path, with values
 mapping on to `verts$id`. These can be joined together into a spatial object
 with:
 
