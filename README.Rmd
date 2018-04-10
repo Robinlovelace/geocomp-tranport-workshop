@@ -1,8 +1,9 @@
 ---
 output: github_document
-title: "Routing with stplanr"
+title: "Routing services and local routing in R: a tutorial with stplanr and dodgr"
 author: "Robin Lovelace"
 date: "`r Sys.Date()`"
+bibliography: references.bib
 ---
 
 ```{r setup, include = FALSE}
@@ -12,10 +13,28 @@ knitr::opts_chunk$set(
 )
 ```
 
-As described in the `stplanr-paper` vignette there are various approaches to routing available in the package.
-This vignette seeks to demonstrate these approaches using a case study in the town of Jena, Germany.
+# Prerequisites
 
-The prerequisites are as follows:
+This workshop is an extension of the transport chapter ([Chapter 7](http://geocompr.robinlovelace.net/transport.html)) in the book *Geocomputation with R* [@lovelace_geocomputation_2018].
+This book is available at [geocompr.robinlovelace.net](http://geocompr.robinlovelace.net).
+Reading the chapter is not a prerequisite but it's recommended reading for context before you dive-into this tutorial.
+The book is description-heavy and code light.
+This tutorial is vice versa.
+
+There are two ways to get the data that is part of this workshop:
+
+- Download and unzip the repo from GitHub via `git clone` or by clicking on [`Clone or download`](https://github.com/Robinlovelace/geocomp-tranport-workshop/archive/master.zip) on the [github.com/Robinlovelace/geocomp-tranport-workshop](https://github.com/Robinlovelace/geocomp-tranport-workshop) web page
+- Entering (or copy-pasting) the following commands in R
+
+```{r, eval=FALSE}
+u = "https://github.com/Robinlovelace/geocomp-tranport-workshop/archive/master.zip"
+download.file(u, "master.zip")
+unzip("master.zip")
+```
+
+From there the easiest way to change working directory, and access the project's data, is by opening the [`geocomp-tranport-workshop.Rproj`](https://github.com/Robinlovelace/geocomp-tranport-workshop/blob/master/geocomp-tranport-workshop.Rproj) project file in RStudio.
+
+The software prerequisites are an up-to-date R version and packages that can be loaded follows:
 
 ```{r}
 library(stplanr)
@@ -25,6 +44,10 @@ library(leaflet)
 library(dodgr)
 ```
 
+# Introduction
+
+As described in the `stplanr-paper` vignette [@lovelace_stplanr:_2017] there are various approaches to routing available in the package.
+This vignette seeks to demonstrate these approaches using a case study in the town of Jena, Germany.
 
 # Online routing
 
@@ -167,7 +190,6 @@ To save time we've saved the result, which can be loaded as follows from the vig
 ways = read_sf("ways.geojson")
 ```
 
-
 Let's check if this is a reasonable representation of Jena's route network:
 
 ```{r}
@@ -180,7 +202,106 @@ We deliberately use a subset of the network for teaching.
 Now, how do we find routes along it?
 
 ```{r}
+ways_sln = SpatialLinesNetwork(ways)
+slotNames(ways_sln)
+weightfield(ways_sln)
+class(ways_sln@g)
+```
 
+```{r}
+g = ways_sln@g
+e = igraph::edge_betweenness(ways_sln@g)
+lwd = e / mean(e)
+plot(ways_sln@sl$geometry, lwd = lwd)
+```
+
+```{r}
+leaflet() %>% addProviderTiles("OpenStreetMap.BlackAndWhite") %>%
+  addPolylines(data = ways_sln@sl, weight = lwd * 5)
+```
+
+What has just happened?
+Well this is a workshop that aims to teach how to learn so this is a question for you to answer.
+Here are some clues:
+
+- `?igraph::edge_betweenness`
+- Google "graph betweenness"
+- Take a look at the paper @cooper_using_2017
+- Ask the sub-question: how does this relate to routing single lines above?
+
+Anothe way to acheive a similar result is with the **dodgr** package:
+
+```{r}
+ways_dg = weight_streetnet(ways)
+summary(ways_dg)
+```
+
+This shows that there are 18,000+ edges just in that subset of ways in a small town. This should explain why we're not using the complete route network!
+
+In any case, we can find the fastest route between any 2 'node' points (lets say edge 9 and 9,000) on the graph as follows:
+
+```{r}
+dp = dodgr_paths(ways_dg, from = "9", to = "9000")
+str(dp)
+```
+
+The result is a character of IDs representing the shortest path.
+Join them together into a spatial object with:
+
+```{r}
+verts <- dodgr_vertices(ways_dg)
+path1 <- verts[match(dp[[1]][[1]], verts$id), ]
+head(path1)
+```
+
+The path can be visualised as follows:
+
+```{r}
+leaflet() %>% addTiles() %>% addCircles(path1$x, path1$y)
+```
+
+How can we convert this into a spatial network again?
+To do so we can do routing on an industrial scale, using the bicycle weighting profile as follows:
+
+```{r}
+from <- sample(ways_dg$from_id, size = 100)
+to <- sample(ways_dg$to_id, size = 100)
+flows <- matrix(rep(1, length(from) * length(to)),
+                 nrow = length(from))
+graph_f <- dodgr_flows_aggregate(ways_dg, from, to, flows = flows,
+                                 wt_profile = "bicycle")
+head(graph_f)
+```
+
+The above code created a origin-destination dataset with 100 origins and 100 destinations and found the shortest path, for the bicycle road weight profile, of the 10,000 routes between them.
+Imagine how long all that routing would take using an on-line routing service.
+The code chunk below converts the results back into a spatial object, and plots it:
+
+```{r}
+graph_undir <- merge_directed_flows (graph_f)
+ways_dsf = dodgr_to_sf(net = graph_undir)
+names(ways_dsf$dat)
+names(ways_dsf)
+lwd2 = ways_dsf$dat$flow / mean(ways_dsf$dat$flow)
+plot(ways_dsf$geoms, lwd = lwd2)
+```
+
+Questions for further study:
+
+- How does **dodgr** work?
+    - Hint: see the [`dodgr` vignette](https://cran.r-project.org/web/packages/dodgr/vignettes/dodgr.html#6_shortest_paths) [@padgham_dodgr_]
+- How can more realistic flows between origin-destination pairs be generated?
+    - Hint: see @simini_universal_2012.
+    
+# Acknowledgements
+
+Many thanks to the developers of all the software used in this tutorial and Jannes Muenchow for hosting me in Jena.
+
+For reproducibility, the package versions used for this tutorial are shown below (note the development versions are used in many cases):
+
+```{r}
+devtools::session_info()
 ```
 
 
+# References
