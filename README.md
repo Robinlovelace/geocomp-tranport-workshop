@@ -196,7 +196,8 @@ leaflet() %>% addTiles() %>% addPolylines(data = ways)
 Clearly it's a very simplified route network. A more comprehensive network could be created by altering the arguments passed to `add_osm_feature`, e.g. to simply `add_osm_feature("highway")`. We deliberately use a subset of the network for teaching. Now, how do we find routes along it?
 
 ``` r
-ways_sln = SpatialLinesNetwork(ways)
+ways_sp = as(ways, "Spatial")
+ways_sln = SpatialLinesNetwork(ways_sp)
 slotNames(ways_sln)
 #> [1] "sl"          "g"           "nb"          "weightfield"
 weightfield(ways_sln)
@@ -205,21 +206,32 @@ class(ways_sln@g)
 #> [1] "igraph"
 ```
 
+We can find the shortest path between A and B as follows:
+
+``` r
+from_sln = find_network_nodes(ways_sln, from_coords[1], from_coords[2])
+to_sln = find_network_nodes(ways_sln, to_coords[1], to_coords[2])
+r_local = sum_network_routes(ways_sln, from_sln, to_sln, "length", combinations = F)
+leaflet() %>% addTiles() %>% addPolylines(data = r_local)
+```
+
+![](README_files/figure-markdown_github/unnamed-chunk-18-1.png)
+
 ``` r
 g = ways_sln@g
 e = igraph::edge_betweenness(ways_sln@g)
 lwd = e / mean(e)
-plot(ways_sln@sl$geometry, lwd = lwd)
+plot(ways_sln@sl, lwd = lwd)
 ```
 
-![](README_files/figure-markdown_github/unnamed-chunk-18-1.png)
+![](README_files/figure-markdown_github/unnamed-chunk-19-1.png)
 
 ``` r
 leaflet() %>% addProviderTiles("OpenStreetMap.BlackAndWhite") %>%
   addPolylines(data = ways_sln@sl, weight = lwd * 5)
 ```
 
-![](README_files/figure-markdown_github/unnamed-chunk-19-1.png)
+![](README_files/figure-markdown_github/unnamed-chunk-20-1.png)
 
 What has just happened? Well this is a workshop that aims to teach how to learn so this is a question for you to answer. Here are some clues:
 
@@ -265,29 +277,30 @@ summary(ways_dg)
 
 This shows that there are 18,000+ edges just in that subset of ways in a small town. This should explain why we're not using the complete route network!
 
-In any case, we can find the fastest route between any 2 'node' points (lets say edge 9 and 9,000) on the graph as follows:
+In any case, we can find the fastest route between any 2 'node' points on the graph as follows:
 
 ``` r
-dp = dodgr_paths(ways_dg, from = "9", to = "9000")
+verts <- dodgr_vertices(ways_dg) # the vertices or points for routing
+# path between 2 arbitrarily chosen vertices:
+dp = dodgr_paths(ways_dg, from = verts$id [1], to = verts$id [9000])
 str(dp)
 #> List of 1
-#>  $ 9:List of 1
-#>   ..$ 9-9000: chr [1:551] "5977" "5978" "5979" "5308" ...
+#>  $ 1:List of 1
+#>   ..$ 1-9000: chr [1:335] "45" "46" "47" "501" ...
 ```
 
-The result is a character of IDs representing the shortest path. Join them together into a spatial object with:
+The result is a character vector of IDs representing the shortest path, with values mapping on to `verts$id`. These can be joined together into a spatial object with:
 
 ``` r
-verts <- dodgr_vertices(ways_dg)
 path1 <- verts[match(dp[[1]][[1]], verts$id), ]
 head(path1)
-#>         id        x        y component    n
-#> 10950 5977 11.59390 50.87692         1 5976
-#> 10951 5978 11.59395 50.87697         1 5977
-#> 10952 5979 11.59400 50.87704         1 5978
-#> 9675  5308 11.59404 50.87712         1 5307
-#> 9688  5317 11.59408 50.87722         1 5316
-#> 9690  5318 11.59411 50.87730         1 5317
+#>      id        x        y component   n
+#> 67   45 11.58296 50.92303         1  44
+#> 68   46 11.58299 50.92306         1  45
+#> 69   47 11.58300 50.92310         1  46
+#> 833 501 11.58298 50.92314         1 500
+#> 831 500 11.58308 50.92319         1 499
+#> 829 499 11.58348 50.92363         1 498
 ```
 
 The path can be visualised as follows:
@@ -296,7 +309,7 @@ The path can be visualised as follows:
 leaflet() %>% addTiles() %>% addCircles(path1$x, path1$y)
 ```
 
-![](README_files/figure-markdown_github/unnamed-chunk-23-1.png)
+![](README_files/figure-markdown_github/unnamed-chunk-24-1.png)
 
 How can we convert this into a spatial network again? To do so we can do routing on an industrial scale, using the bicycle weighting profile as follows:
 
@@ -316,12 +329,12 @@ head(graph_f)
 #> 5        1       5       3 11.58137 50.92114     4 11.58129 50.92105
 #> 6        1       6       4 11.58129 50.92105     3 11.58137 50.92114
 #>            d d_weighted   highway  way_id component flow
-#> 1 0.01764792 0.02205990 secondary 4934236         1  354
-#> 2 0.01764792 0.02205990 secondary 4934236         1  334
-#> 3 0.21501921 0.26877401 secondary 4934236         1  354
-#> 4 0.21501921 0.26877401 secondary 4934236         1  334
-#> 5 0.01215404 0.01519255 secondary 4934236         1  354
-#> 6 0.01215404 0.01519255 secondary 4934236         1  334
+#> 1 0.01764792 0.02205990 secondary 4934236         1  361
+#> 2 0.01764792 0.02205990 secondary 4934236         1  340
+#> 3 0.21501921 0.26877401 secondary 4934236         1  361
+#> 4 0.21501921 0.26877401 secondary 4934236         1  340
+#> 5 0.01215404 0.01519255 secondary 4934236         1  361
+#> 6 0.01215404 0.01519255 secondary 4934236         1  340
 ```
 
 The above code created a origin-destination dataset with 100 origins and 100 destinations and found the shortest path, for the bicycle road weight profile, of the 10,000 routes between them. Imagine how long all that routing would take using an on-line routing service. The code chunk below converts the results back into a spatial object, and plots it:
@@ -337,7 +350,7 @@ lwd2 = ways_dsf$dat$flow / mean(ways_dsf$dat$flow)
 plot(ways_dsf$geoms, lwd = lwd2)
 ```
 
-![](README_files/figure-markdown_github/unnamed-chunk-25-1.png)
+![](README_files/figure-markdown_github/unnamed-chunk-26-1.png)
 
 Questions for further study:
 
@@ -371,7 +384,7 @@ devtools::session_info()
 #>  base         * 3.4.4      2018-03-16 local                               
 #>  base64enc      0.1-3      2015-07-28 cran (@0.1-3)                       
 #>  bindr          0.1.1      2018-03-13 CRAN (R 3.4.4)                      
-#>  bindrcpp     * 0.2.2      2018-03-29 CRAN (R 3.4.4)                      
+#>  bindrcpp       0.2.2      2018-03-29 CRAN (R 3.4.4)                      
 #>  bitops         1.0-6      2013-08-17 CRAN (R 3.4.1)                      
 #>  boot           1.3-20     2017-07-30 CRAN (R 3.4.1)                      
 #>  class          7.3-14     2015-08-30 CRAN (R 3.4.0)                      

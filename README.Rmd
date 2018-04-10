@@ -203,17 +203,28 @@ We deliberately use a subset of the network for teaching.
 Now, how do we find routes along it?
 
 ```{r}
-ways_sln = SpatialLinesNetwork(ways)
+ways_sp = as(ways, "Spatial")
+ways_sln = SpatialLinesNetwork(ways_sp)
 slotNames(ways_sln)
 weightfield(ways_sln)
 class(ways_sln@g)
 ```
 
+We can find the shortest path between A and B as follows:
+
+```{r}
+from_sln = find_network_nodes(ways_sln, from_coords[1], from_coords[2])
+to_sln = find_network_nodes(ways_sln, to_coords[1], to_coords[2])
+r_local = sum_network_routes(ways_sln, from_sln, to_sln, "length", combinations = F)
+leaflet() %>% addTiles() %>% addPolylines(data = r_local)
+```
+
+
 ```{r}
 g = ways_sln@g
 e = igraph::edge_betweenness(ways_sln@g)
 lwd = e / mean(e)
-plot(ways_sln@sl$geometry, lwd = lwd)
+plot(ways_sln@sl, lwd = lwd)
 ```
 
 ```{r}
