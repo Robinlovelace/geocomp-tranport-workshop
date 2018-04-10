@@ -1,0 +1,186 @@
+---
+output: github_document
+title: "Routing with stplanr"
+author: "Robin Lovelace"
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+As described in the `stplanr-paper` vignette there are various approaches to routing available in the package.
+This vignette seeks to demonstrate these approaches using a case study in the town of Jena, Germany.
+
+The prerequisites are as follows:
+
+```{r}
+library(stplanr)
+library(tmap)
+library(sf)
+library(leaflet)
+library(dodgr)
+```
+
+
+# Online routing
+
+The simplest routing strategy is to use an online service such as the public facing OSRM demo routing service at http://router.project-osrm.org/ with an interactive map-based GUI at http://map.project-osrm.org/.
+
+We can demonstrate this routing service in action by planning a route from Jena Paradies rail station to Jen Tower, a building that is "the tallest in Eastern Germany"  according to [Wikipedia](https://en.wikipedia.org/wiki/JenTower).
+This represents a typical journey that one may take on visiting the city for the first time:
+
+```{r}
+from = "Jena Paradies"
+to = "JenTower"
+```
+
+```{r, eval=FALSE}
+r_osrm = route_osrm(from, to)
+saveRDS(r_osrm, "r_osrm.Rds")
+```
+
+What just happened?
+There were 3 main steps taken inside the function `route_osrm()`:
+
+- The origin and destination text strings were geo-coded
+- The information was sent to the OSRM server and returned
+- The data was converted into a form that can be used in R
+
+In case this does not work on your computer (you need a recent version of stplanr) you can load it as follows:
+
+```{r}
+r_osrm = readRDS("r_osrm.Rds")
+```
+
+
+The class of the resulting object can be queried as follows:
+
+```{r}
+class(r_osrm)
+```
+
+We can verify that it contains the spatial information we need by plotting it interactively:
+
+```{r}
+leaflet() %>% addTiles() %>% addPolylines(data = r_osrm)
+```
+
+We can execute the first step taken as follows:
+
+```{r}
+(from_coords = geo_code(from))
+(to_coords = geo_code(to))
+```
+
+We could continue to explore what happened in the function by executing the functions `viaroute()` and `viaroute2sldf()` sequentially but that is not the point of this vignette (see the source code for more information on the internals of `route_osrm` but be warned, they are not pretty)!
+
+Other routing services can also be used, as illustrated by the `route_graphhopper()` call below:
+
+```{r, eval=FALSE}
+r_graphbike = route_graphhopper(from_coords, to_coords)
+saveRDS(r_graphbike, "r_graphbike.Rds")
+```
+
+Be warned: this code may not work on your computer because you need a graphhopper api key.
+We can check that we have one on this computer with the following command:
+
+```{r}
+Sys.getenv("GRAPHHOPPER") %>% nchar()
+```
+
+If so you will have 32 characters, if not the result will have 0.
+(To get a Graphhopper API key see `?route_graphhopper`.)
+That is not a problem as I've saved the result, which can be loaded with:
+
+```{r}
+r_graphbike = readRDS("r_graphbike.Rds")
+```
+
+The advantage of the Graphhopper API is that it has three routing profiles available (and many more with their paid plan), as illustrated below (the default is bike):
+
+```{r, eval=FALSE}
+r_graphcar = route_graphhopper(from_coords, to_coords, vehicle = "car")
+r_graphwalk = route_graphhopper(from_coords, to_coords, vehicle = "foot")
+saveRDS(r_graphcar, "r_graphcar.Rds")
+saveRDS(r_graphwalk, "r_graphwalk.Rds")
+```
+
+As before, these can be loaded from the repo as follows:
+
+```{r}
+r_graphcar = readRDS("r_graphcar.Rds")
+r_graphwalk = readRDS("r_graphwalk.Rds")
+```
+
+
+We can compare these different routes, as illustrated in the figures below:
+
+```{r routes, fig.show='hold', fig.cap="Routes for driving (left panel, with OSRM in red and Graphhopper in orange) and active transport (right panel, cycling in green, walking in blue).", out.width="50%"}
+b = tmaptools::bb(r_osrm, ext = 1.2)
+tm_shape(r_osrm, bbox = b) +
+  tm_lines(col = "red", lwd = 6) +
+  qtm(r_graphcar, lines.col = "orange", lines.lwd = 4)
+tm_shape(r_osrm, bbox = b) +
+  tm_lines(col = "white", lwd = 6) +
+  qtm(r_graphbike, lines.col = "green", lines.lwd = 3) +
+  qtm(r_graphwalk, lines.col = "blue", lines.lwd = 2)
+```
+
+The results show a diversity of route options.
+We can make the following generalisations:
+
+- Motorised routes tend to be more circuitous
+- Routes for the same mode can be very different depending on which weighting profile is used
+- Walking and cycling routes tend to be similar, although walking routes tend to be more direct as they can pass through steps etc.
+
+There are some major limitations associated with online routing:
+
+- It is slow
+- It can be expensive
+- It's not conducive to reproducibility - the service may change and you need an API key 
+- You do not have control over the weighting profiles (this can be good and bad)
+
+To overcome these limitations we can do local routing.
+
+# Local routing
+
+To do local routing you need a route network, e.g. as provided by the following commands:
+
+```{r, eval=FALSE}
+library(osmdata)
+bb_jena = getbb("Jena")
+osm_jena = opq(bbox = bb_jena) %>% 
+  add_osm_feature("highway", "prim|second|cycle", value_exact = FALSE) %>% 
+  osmdata_sf()
+summary(osm_jena)
+ways = osm_jena$osm_lines
+write_sf(ways, "ways.geojson")
+```
+
+To save time we've saved the result, which can be loaded as follows from the vignettes folder:
+
+```{r}
+ways = read_sf("ways.geojson")
+```
+
+
+Let's check if this is a reasonable representation of Jena's route network:
+
+```{r}
+leaflet() %>% addTiles() %>% addPolylines(data = ways)
+```
+
+Clearly it's a very simplified route network.
+A more comprehensive network could be created by altering the arguments passed to `add_osm_feature`, e.g. to simply `add_osm_feature("highway")`.
+We deliberately use a subset of the network for teaching.
+Now, how do we find routes along it?
+
+```{r}
+
+```
+
+
