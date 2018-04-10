@@ -311,6 +311,18 @@ leaflet() %>% addTiles() %>% addCircles(path1$x, path1$y)
 
 ![](README_files/figure-markdown_github/unnamed-chunk-24-1.png)
 
+Let's find the nodes nearest our original from and to points:
+
+``` r
+knf = nabor::knn(cbind(verts$x, verts$y), matrix(from_coords, ncol = 2), k = 1)
+knt = nabor::knn(cbind(verts$x, verts$y), matrix(to_coords, ncol = 2), k = 1)
+dp = dodgr_paths(ways_dg, from = verts$id[knf$nn.idx], to = verts$id[knt$nn.idx])
+path2 <- verts[match(dp[[1]][[1]], verts$id), ]
+leaflet() %>% addTiles() %>% addCircles(path2$x, path2$y)
+```
+
+![](README_files/figure-markdown_github/unnamed-chunk-25-1.png)
+
 How can we convert this into a spatial network again? To do so we can do routing on an industrial scale, using the bicycle weighting profile as follows:
 
 ``` r
@@ -329,12 +341,12 @@ head(graph_f)
 #> 5        1       5       3 11.58137 50.92114     4 11.58129 50.92105
 #> 6        1       6       4 11.58129 50.92105     3 11.58137 50.92114
 #>            d d_weighted   highway  way_id component flow
-#> 1 0.01764792 0.02205990 secondary 4934236         1  361
-#> 2 0.01764792 0.02205990 secondary 4934236         1  340
-#> 3 0.21501921 0.26877401 secondary 4934236         1  361
-#> 4 0.21501921 0.26877401 secondary 4934236         1  340
-#> 5 0.01215404 0.01519255 secondary 4934236         1  361
-#> 6 0.01215404 0.01519255 secondary 4934236         1  340
+#> 1 0.01764792 0.02205990 secondary 4934236         1  425
+#> 2 0.01764792 0.02205990 secondary 4934236         1  264
+#> 3 0.21501921 0.26877401 secondary 4934236         1  425
+#> 4 0.21501921 0.26877401 secondary 4934236         1  264
+#> 5 0.01215404 0.01519255 secondary 4934236         1  425
+#> 6 0.01215404 0.01519255 secondary 4934236         1  264
 ```
 
 The above code created a origin-destination dataset with 100 origins and 100 destinations and found the shortest path, for the bicycle road weight profile, of the 10,000 routes between them. Imagine how long all that routing would take using an on-line routing service. The code chunk below converts the results back into a spatial object, and plots it:
@@ -350,7 +362,7 @@ lwd2 = ways_dsf$dat$flow / mean(ways_dsf$dat$flow)
 plot(ways_dsf$geoms, lwd = lwd2)
 ```
 
-![](README_files/figure-markdown_github/unnamed-chunk-26-1.png)
+![](README_files/figure-markdown_github/unnamed-chunk-27-1.png)
 
 Questions for further study:
 
@@ -443,6 +455,7 @@ devtools::session_info()
 #>  methods      * 3.4.4      2018-03-16 local                               
 #>  mime           0.5        2016-07-07 CRAN (R 3.3.2)                      
 #>  munsell        0.4.3      2016-02-13 CRAN (R 3.3.2)                      
+#>  nabor          0.4.7      2017-05-19 CRAN (R 3.4.1)                      
 #>  nlme           3.1-131.1  2018-02-16 CRAN (R 3.4.3)                      
 #>  openxlsx       4.0.17     2017-03-23 CRAN (R 3.4.1)                      
 #>  osmar          1.1-7      2013-11-21 cran (@1.1-7)                       

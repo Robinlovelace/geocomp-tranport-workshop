@@ -274,6 +274,17 @@ The path can be visualised as follows:
 leaflet() %>% addTiles() %>% addCircles(path1$x, path1$y)
 ```
 
+Let's find the nodes nearest our original from and to points:
+
+```{r}
+knf = nabor::knn(cbind(verts$x, verts$y), matrix(from_coords, ncol = 2), k = 1)
+knt = nabor::knn(cbind(verts$x, verts$y), matrix(to_coords, ncol = 2), k = 1)
+dp = dodgr_paths(ways_dg, from = verts$id[knf$nn.idx], to = verts$id[knt$nn.idx])
+path2 <- verts[match(dp[[1]][[1]], verts$id), ]
+leaflet() %>% addTiles() %>% addCircles(path2$x, path2$y)
+```
+
+
 How can we convert this into a spatial network again?
 To do so we can do routing on an industrial scale, using the bicycle weighting profile as follows:
 
