@@ -4,6 +4,7 @@ title: "Routing services and local routing in R: a tutorial with stplanr and dod
 author: "Robin Lovelace"
 date: "`r Sys.Date()`"
 bibliography: references.bib
+always_allow_html: yes
 ---
 
 ```{r setup, include = FALSE}
@@ -238,18 +239,20 @@ summary(ways_dg)
 
 This shows that there are 18,000+ edges just in that subset of ways in a small town. This should explain why we're not using the complete route network!
 
-In any case, we can find the fastest route between any 2 'node' points (lets say edge 9 and 9,000) on the graph as follows:
+In any case, we can find the fastest route between any 2 'node' points on the graph as follows:
 
 ```{r}
-dp = dodgr_paths(ways_dg, from = "9", to = "9000")
+verts <- dodgr_vertices(ways_dg) # the vertices or points for routing
+# path between 2 arbitrarily chosen vertices:
+dp = dodgr_paths(ways_dg, from = verts$id [1], to = verts$id [9000])
 str(dp)
 ```
 
-The result is a character of IDs representing the shortest path.
-Join them together into a spatial object with:
+The result is a character vector of IDs representing the shortest path, with values
+mapping on to `verts$id`. These can be joined together into a spatial object
+with:
 
 ```{r}
-verts <- dodgr_vertices(ways_dg)
 path1 <- verts[match(dp[[1]][[1]], verts$id), ]
 head(path1)
 ```
